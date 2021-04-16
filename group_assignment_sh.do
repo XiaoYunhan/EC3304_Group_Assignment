@@ -7,71 +7,120 @@ use "`c(pwd)'`c(dirsep)'assignment_data.dta", clear
 drop if missing(IPI)
 tsset month
 
-// 1. Data plot with brief overview, sample period used
+/////// 1. Data plot with brief overview, sample period used /////
 twoway line IPI month
 * <IPI> only has data after 1983m1. There seem to be an increaasing trend over the years.
 
-// 2a. Test for unit roots 
+
+/////// 2a. Test for unit roots for dependent variable, IPI /////
 dfuller IPI, trend
-* I have conducted the dickey-fuller test with trend. In this case, we reject the null hypothesis of a random walk with drift. This is evidence that the underlying process is stationary.
 
-dfgls IPI
-* I have also performed the modified dickey-fuller t test proposed by Elliott, Rothenberg, and Stock (1996). The null hypothesis of a unit root is rejected at 5% level for lag 1 and it is not rejected for all other lags.
+* I have conducted the dickey-fuller test with trend. In this case, we reject the null hypothesis of a random walk with drift as the test statistic is lower than the 1% critical value. This is evidence that the underlying process is stationary.
 
+/////// 2b. Test for structural breaks for dependent variable, IPI /////
 
-//2b. Test for structural breaks
 * Do a regression where the dependent variable is IPI and the independent variable is the date
 regress IPI month,vce(robust)
 
 * Since it is not obvious from the graph whether there is a structural break in our data, we test for an unknown break date
+
 estat sbsingle
 
-//The test rejects the null hypothesis of no structural break and detects a break in the 2nd month of 1994.
+* The test rejects the null hypothesis of no structural break and detects a break in the 2nd month of 1994.
 
 twoway line IPI month, tline(1994m2)
 
 * Unfortunately, the structural break is not obvious from the graph.
 
-// 3. Rationale for any additional data used, sources of data
+///// 3. Rationale for any additional data used, sources of data /////
 
-* We will use Monthly Inflation Rate in Singapore (CPI) as an additional data source to help with forecasting. Friedman’s hypothesis regarding the relationship between inflation, inflation uncertainty and output growth states that full employment policy objective of the government tends to increase the rate of inflation which increases the uncertainty about the future course of inflation. (https://ideas.repec.org/p/ift/wpaper/1211.html)
+* We will use Monthly Inflation Rate in Singapore (CPI) as an additional data source to help with forecasting. Friedman’s hypothesis regarding the relationship between inflation, inflation uncertainty and output growth states that full employment policy objective of the government tends to increase the rate of inflation which increases the uncertainty about the future course of inflation. Both variable have an increasing trend over the years. (https://ideas.repec.org/p/ift/wpaper/1211.html)
 
 twoway line IPI month || line CPI month, yaxis(2)
 
+///// Test for unit roots for predictor variable CPI /////
+dfuller CPI,trend
+* I have conducted the dickey-fuller test with trend. Since the test statistic is higher than all three critical values, we do not reject the null hypothesis that there is non-stationarity in the time series.
 
-// 4. Data transformation
-* Generage log IPI, the MoM growth rate of log IPI
-//
-gen lIPI = log(IPI)
-gen mom_lIPI = lIPI - L.lIPI
+///// Test for structural breaks for predictor variable CPI /////
 
-twoway line mom_lIPI month
-ac mom_lIPI
+* Do a regression where the dependent variable is CPI and the independent variable is the date
+regress CPI month,vce(robust)
 
-// 4a. Retest for unit roots 
-dfuller mom_lIPI
-* I have conducted the dickey-fuller test with trend. In this case, we reject the null hypothesis of a random walk with drift since the approximate p-value is 0. 
-
-
-//4b. Test for structural breaks
-//Do a regression where the dependent variable is IPI and the independent variable is the date
-regress mom_lIPI month,vce(robust)
-
-//Since it is not obvious from the graph whether there is a structural break in our data, we test for an unknown break date
+* Since it is not obvious from the graph whether there is a structural break in our data, we test for an unknown break date
 estat sbsingle
-* Since the p value is very high, we can fail to reject the null hypothesis and can conclude that there is no structural break in our data. Hence, mom_lIPI is stationary
 
-// 5a. Lag selection with original CPI variable
-ardl mom_lIPI CPI if tin(1983m1, 2020m12), maxlags(12 12) bic
-predict IPIhat if month == m(2021m1)
-gen sq_error_IPI_2021m1 = IPIhat - mom_lIPI if month == m(2021m1)
-list month mom_lIPI IPIhat sq_error_IPI_2021m1 if month == m(2021m1)
+* The test rejects the null hypothesis of no structural break and detects a break in the 7nd month of 2013.
+twoway line CPI month, tline(2013m7)
 
-// 5b. Lag selection with lagged CPI variable
-gen lCPI = l.CPI
-ardl mom_lIPI lCPI if tin(1983m1, 2020m12), maxlags(12 12) bic
-predict lIPIhat if month == m(2021m1)
-gen sq_error_lIPI_2021m1 = lIPIhat - mom_lIPI if month == m(2021m1)
-list month mom_lIPI lIPIhat sq_error_IPI_2021m1 if month == m(2021m1)
+* We can see that there is a significant dip in CPI in July 2013.
 
-// 6. Point and interval forecasts
+///// 4. Data transformation /////
+
+* Generate log IPI and the first difference
+
+gen lIPI = log(IPI)
+gen dlIPI = lIPI - L.lIPI
+
+* Generate log CPI and the first difference
+gen lCPI = log(CPI)
+gen dlCPI = lCPI- L.lCPI
+
+twoway line dlIPI month
+twoway line dlCPI month
+
+*Both plot look fairly stationary 
+
+///// Retest for unit roots for transformed dependent variable, dlIPI /////
+
+dfuller dlIPI
+
+* I have conducted the dickey-fuller test without trend. In this case, we reject the null hypothesis of a random walk since the test statistic is significantly lesser than the 1% critical value.
+
+/////// Retest for structural breaks for transformed dependent variable, dlIPI /////
+
+* Do a regression where the dependent variable is dlIPI and the independent variable is the date
+regress dlIPI month,vce(robust)
+
+* Since it is not obvious from the graph whether there is a structural break in our data, we test for an unknown break date
+
+estat sbsingle
+
+* Since the p value is very high, we fail to reject the null hypothesis and can conclude it is highly likely that there is no structural break in our data. Hence, dlIPI is stationary
+
+///// Retest for unit roots for transformed predictor variable, dlCPI /////
+
+dfuller dlCPI
+
+* I have conducted the dickey-fuller test without trend. In this case, we reject the null hypothesis of a random walk since the test statistic is significantly lesser than the 1% critical value.
+
+/////// Retest for structural breaks for transformed dependent variable, dlCPI /////
+
+* Do a regression where the dependent variable is dlCPI and the independent variable is the date
+regress dlCPI month,vce(robust)
+
+estat sbsingle
+
+* The test rejects the null hypothesis of no structural break and detects a break in May of 2014.
+
+twoway line dlCPI month, tline(2014m5)
+
+/////// 5a. Lag selection with original CPI variable /////
+ardl dlIPI CPI if tin(1983m1, 2020m12), maxlags(12 12) bic
+predict dlIPI_hat_CPI if month == m(2021m1)
+gen sq_error_dlIPI_CPI_2021m1 = dlIPI_hat_CPI - dlIPI if month == m(2021m1)
+
+/////// 5b. Lag selection with logged CPI variable /////
+ardl dlIPI lCPI if tin(1983m1, 2020m12), maxlags(12 12) bic
+predict dlIPI_hat_lCPI if month == m(2021m1)
+gen sq_error_dlIPI_lCPI_2021m1 = dlIPI_hat_lCPI - dlIPI if month == m(2021m1)
+
+/////// 5c. Lag selection with lagged logged CPI variable /////
+ardl dlIPI dlCPI if tin(1983m1, 2020m12), maxlags(12 12) bic
+predict dlIPI_hat_dlCPI if month == m(2021m1)
+gen sq_error_dlIPI_dlCPI_2021m1 = dlIPI_hat_dlCPI - dlIPI if month == m(2021m1)
+list month dlIPI dlIPI_hat_CPI sq_error_dlIPI_CPI_2021m1 dlIPI_hat_lCPI sq_error_dlIPI_lCPI_2021m1 dlIPI_hat_dlCPI sq_error_dlIPI_dlCPI_2021m1 if month == m(2021m1)
+
+* Since the ADL(2,0) coefficients in 5c resulted in the lowest squared error, we will be using dlIPI_hat_dlCPI to forecast the value of IPI in Jan 2021
+
+di "The predicted IPI value in January 2021 is " exp(-.0067066 + 4.706065) " and the squared error is " (exp(-.0067066 + 4.706065) - 115.67)^2
